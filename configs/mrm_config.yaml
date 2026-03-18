@@ -8,9 +8,25 @@ bounds:
 
 # 2. 优化器超参数 (Optimizer Settings)
 optimization:
-  init_points: 1           # 初始随机采样点数
-  n_iter: 1               # 贝叶斯主动学习迭代次数
-  kappa: 2.576             # 探索(Exploration)与利用(Exploitation)的权衡参数
+  init_points: 5           # 初始随机采样点数
+  n_iter: 30               # 贝叶斯主动学习迭代次数
+  kappa: 2.576             # 探索(Exploration)与利用(Exploitation)的权衡参数 (旧版兼容保留)
+  
+  # 2.1 高级代理模型参数 (Gaussian Process)
+  gp_params:
+    alpha: 1e-4            # 添加噪声参数，提高 GP 面对评估波动的鲁棒性
+    
+  # 2.2 采集函数配置 (Acquisition Function)
+  acq_func:
+    kind: "ei"             # 采集策略："ucb" (Upper Confidence Bound), "ei" (Expected Improvement), 或 "poi" (Probability of Improvement)
+    kappa: 2.576           # UCB 策略的利用/探索平衡因子
+    xi: 0.0                # EI/POI 策略的优化量阈值
+    
+  # 2.3 提前停止策略 (Early Stopping)
+  early_stopping:
+    enabled: true          # 是否开启提前停止
+    patience: 5            # 容忍多少个 iteration 内 FoM 没有显著改善
+    tol: 0.01              # 最小显著改善阈值
 
 # 3. 目标函数权重 (FoM Weights)
 weights:

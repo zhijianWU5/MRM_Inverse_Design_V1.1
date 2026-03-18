@@ -46,18 +46,57 @@ def main():
         allow_duplicate_points=True
     )
     
+    # --- 5.1 设置高级代理模型参数 ---
+    if 'gp_params' in config['optimization']:
+        optimizer.set_gp_params(**config['optimization']['gp_params'])
+    
     # 6. 执行优化循环
     init_points = config['optimization']['init_points']
     n_iter = config['optimization']['n_iter']
-    kappa = config['optimization']['kappa']
+    # 兼容处理原来直接写 kappa 的情况
+    kappa = config['optimization'].get('kappa', 2.576)
     
     logger.info(f"-> 阶段一：开始随机探索 (Exploration)，采样点数: {init_points}")
     optimizer.maximize(init_points=init_points, n_iter=0)
     
-    logger.info(f"-> 阶段二：开始贝叶斯智能寻优 (Active Learning)，迭代次数: {n_iter}")
-    # 设定采集函数为 Expected Improvement (EI)
-    utility = UtilityFunction(kind="ei", kappa=kappa, xi=0.0)
-    optimizer.maximize(init_points=0, n_iter=n_iter, acquisition_function=utility)
+    logger.info(f"-> 阶段二：开始贝叶斯智能寻优 (Active Learning)，最大迭代次数: {n_iter}")
+    
+    # --- 6.1 配置采集函数 ---
+    acq_conf = config['optimization'].get('acq_func', {'kind': 'ei', 'kappa': kappa, 'xi': 0.0})
+    utility = UtilityFunction(kind=acq_conf.get('kind', 'ei'), 
+                              kappa=acq_conf.get('kappa', kappa), 
+                              xi=acq_conf.get('xi', 0.0))
+    
+    # --- 6.2 执行主动学习与 Early Stopping 判断 ---
+    early_stop_conf = config['optimization'].get('early_stopping', {'enabled': False})
+    if early_stop_conf.get('enabled', False):
+        patience = early_stop_conf.get('patience', 5)
+        tol = early_stop_conf.get('tol', 0.01)
+        best_fom = -float('inf')
+        no_improve_count = 0
+        
+        logger.info(f"已开启提前停止(Early Stopping)策略: patience={patience}, tol={tol}")
+        
+        for step in range(n_iter):
+            # 增量执行，每次迭代1步
+            optimizer.maximize(init_points=0, n_iter=1, acquisition_function=utility)
+            
+            # 记录并判断当前步的提升幅度
+            current_best = optimizer.max['target']
+            improvement = current_best - best_fom
+            
+            if improvement > tol:
+                best_fom = current_best
+                no_improve_count = 0  # 如果有显著提升，重置计数器
+            else:
+                no_improve_count += 1
+                
+            if no_improve_count >= patience:
+                logger.info(f"连续 {patience} 次迭代未见显著提升 (阈值:{tol})，触发提前停止！")
+                break
+    else:
+        # 如果未开启提前停止，一次性执行完毕
+        optimizer.maximize(init_points=0, n_iter=n_iter, acquisition_function=utility)
     
     # 7. 输出最终寻优结果
     best_res = optimizer.max

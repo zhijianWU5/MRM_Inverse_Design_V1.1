@@ -26,7 +26,8 @@ def plot_optimization_results(optimizer, init_points):
     ax1.plot(iterations, running_max, 'r*-', linewidth=2, label='Best FoM Found')
     
     # 画一条垂直虚线，区分“随机探索阶段”和“贝叶斯寻优阶段”
-    ax1.axvline(x=init_points + 0.5, color='gray', linestyle='--', label='End of Random Init')
+    if len(iterations) > init_points:
+        ax1.axvline(x=init_points + 0.5, color='gray', linestyle='--', label='End of Random Init')
     
     ax1.set_title('Bayesian Optimization Convergence', fontsize=14)
     ax1.set_xlabel('Iteration Number', fontsize=12)
