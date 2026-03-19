@@ -1,7 +1,7 @@
 import yaml
 import torch
 import numpy as np
-
+from core.evaluator import MRMEvaluator
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_mll
 from botorch.acquisition.multi_objective import qLogNoisyExpectedHypervolumeImprovement
@@ -31,14 +31,20 @@ def load_config(config_path='configs/mrm_config.yaml'):
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
-def generate_mock_optical_data(X):
-    """模拟 Lumerical FDTD 输出 [kappa, t_mag, phi, alpha_pass]"""
-    # 使用支持批处理的 X[...] 语法
-    kappa = 0.2 + 0.1 * torch.sin(X[..., 1] / 200.0)
-    t_mag = torch.sqrt(torch.clamp(1 - kappa**2, min=1e-6)) * 0.98  
-    phi = X[..., 2] / 500.0
-    alpha_pass = 2.0 + (X[..., 2] - 400)**2 / 10000.0
-    return torch.stack([kappa, t_mag, phi, alpha_pass], dim=-1)
+def evaluate_optical_physics(X_tensor, evaluator):
+    """桥接函数：将 BoTorch 推荐的张量坐标送入 Lumerical，并将其结果组装回张量"""
+    Y_list = []
+    # 遍历批次中的每一个采样点
+    for i in range(X_tensor.shape[0]):
+        r = X_tensor[i, 0].item()
+        g = X_tensor[i, 1].item()
+        w = X_tensor[i, 2].item()
+        
+        print(f"     [FDTD] 正在仿真样本 {i+1}/{X_tensor.shape[0]}: R={r:.2f} um, gap={g:.1f} nm, w={w:.1f} nm...")
+        kappa, t_mag, phi, alpha_pass = evaluator.run_physical_simulation(r, g, w)
+        Y_list.append([kappa, t_mag, phi, alpha_pass])
+        
+    return torch.tensor(Y_list, dtype=torch.float64)
 
 # ==========================================
 # 核心修复 1: 完美融合 GP 与解析公式的自定义模型
@@ -149,8 +155,9 @@ def get_fitted_model(train_X, train_Y_opt, bounds):
     return model
 
 def main():
-    print("[System] 启动 MRM 逆向设计 DSE 引擎 (BoTorch 脱机测试版)...")
+    print("[System] 启动 MRM 逆向设计 DSE 引擎 (全自动真机闭环版)...")
     config = load_config()
+    evaluator = MRMEvaluator() # <--- 新增这行，唤醒 Lumerical
     
     # 1. 解析设计空间边界 (支持自动兼容 YAML 中的科学计数法)
     b_dict = config['bounds']
@@ -165,7 +172,8 @@ def main():
     # 2. 初始化 LHS 采样 (此处简单使用随机采样代替)
     init_points = config['optimization']['init_points']
     train_X = bounds[0] + (bounds[1] - bounds[0]) * torch.rand(init_points, 5)
-    train_Y_opt = generate_mock_optical_data(train_X)
+    print(f"\n[System] 开始执行 {init_points} 个初始 LHS 采样点的真机仿真 (这可能需要几分钟)...")
+    train_Y_opt = evaluate_optical_physics(train_X, evaluator)
     
     # 3. 贝叶斯优化主循环
     n_iter = config['optimization']['n_iter']
@@ -209,13 +217,15 @@ def main():
         print(f"     推荐候选点: R={new_x[0,0]:.2f} um, gap={new_x[0,1]:.1f} nm, Nd={new_x[0,3]:.1e}")
         
         # 3.5 获取真实的物理反馈 (此处用 Mock 数据发生器替代)
-        new_y_opt = generate_mock_optical_data(new_x)
+        new_y_opt = evaluate_optical_physics(new_x, evaluator)
         
         # 3.6 更新全局数据集
         train_X = torch.cat([train_X, new_x])
         train_Y_opt = torch.cat([train_Y_opt, new_y_opt])
 
     print("\n[System] 脱机测试运行完毕！计算图与梯度链全程保持连通，未发生断裂。")
+    print("\n[System] 逆向设计优化圆满完成！")
+    evaluator.shutdown() # <--- 释放 Lumerical 进程
 
 if __name__ == '__main__':
     import warnings
