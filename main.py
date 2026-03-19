@@ -1,6 +1,8 @@
 import yaml
 import torch
 import numpy as np
+import pandas as pd
+from utils.visualizer import plot_botorch_results
 from core.evaluator import MRMEvaluator
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_mll
@@ -223,9 +225,78 @@ def main():
         train_X = torch.cat([train_X, new_x])
         train_Y_opt = torch.cat([train_Y_opt, new_y_opt])
 
-    print("\n[System] 脱机测试运行完毕！计算图与梯度链全程保持连通，未发生断裂。")
     print("\n[System] 逆向设计优化圆满完成！")
-    evaluator.shutdown() # <--- 释放 Lumerical 进程
+    evaluator.shutdown() # 释放 Lumerical 进程
+
+    # ==========================================
+    # 数据持久化与指标逆向解析
+    # ==========================================
+    print("[System] 正在提取所有迭代张量并计算物理边界...")
+    with torch.no_grad():
+        # 重构 11 维全量物理张量
+        det_Y = electrical_and_passthrough(train_X)
+        Y_full = torch.cat([train_Y_opt, det_Y], dim=-1)
+        
+        # 逆向解析出真实的系统性能指标
+        er_vals = 10.0 - er_con(Y_full)
+        q_vals = 9700.0 - q_lower_con(Y_full)
+        fsr_vals = 6.4e-9 - fsr_con(Y_full)
+        rc_vals = 20e9 - rc_con(Y_full)
+        eff_vals = obj_efficiency(Y_full)
+        
+        # 严苛的刚性约束全量检验
+        valid_mask = (er_con(Y_full) <= 0) & \
+                     (q_lower_con(Y_full) <= 0) & \
+                     (q_upper_con(Y_full) <= 0) & \
+                     (rc_con(Y_full) <= 0) & \
+                     (fsr_con(Y_full) <= 0)
+
+    # 组装为格式化的 DataFrame
+    df = pd.DataFrame({
+        'Radius (um)': train_X[:, 0].numpy(),
+        'Gap (nm)': train_X[:, 1].numpy(),
+        'Width (nm)': train_X[:, 2].numpy(),
+        'Nd (cm^-3)': train_X[:, 3].numpy(),
+        'r_L': train_X[:, 4].numpy(),
+        'ER (dB)': er_vals.numpy(),
+        'Q Factor': q_vals.numpy(),
+        'FSR (nm)': fsr_vals.numpy() * 1e9,
+        'f_RC (GHz)': rc_vals.numpy() / 1e9,
+        'Efficiency': eff_vals.numpy(),
+        'Is_Valid': valid_mask.numpy()
+    })
+    
+    out_path = 'data/optimization_results.csv'
+    df.to_csv(out_path, index=False)
+    print(f"[System] 物理指标解算完成！原始数据集已保存至 {out_path}")
+    
+    # 打印最终验收结论
+    valid_df = df[df['Is_Valid'] == True]
+    if not valid_df.empty:
+        best_idx = (valid_df['Efficiency'] / valid_df['Radius (um)']).idxmax()
+        best_pt = valid_df.loc[best_idx]
+        print("\n" + "="*45)
+        print(" 🎯 发现符合全部刚性物理约束的综合最佳结构：")
+        print("="*45)
+        print(f" [几何参数] 半径 R     = {best_pt['Radius (um)']:.3f} μm")
+        print(f" [几何参数] 间距 gap   = {best_pt['Gap (nm)']:.1f} nm")
+        print(f" [电学参数] 掺杂 Nd    = {best_pt['Nd (cm^-3)']:.2e} cm⁻³")
+        print("-" * 45)
+        print(f" [系统指标] 消光比 ER  = {best_pt['ER (dB)']:.2f} dB (>=10)")
+        print(f" [系统指标] 品质因数 Q  = {best_pt['Q Factor']:.0f} (9700~10000)")
+        print(f" [系统指标] RC带宽     = {best_pt['f_RC (GHz)']:.1f} GHz (>=20)")
+        print(f" [系统指标] FSR        = {best_pt['FSR (nm)']:.2f} nm (>=6.4)")
+        print("="*45 + "\n")
+    else:
+        print("\n[警告] 经严格检验，所有探索点均未能同时满足 ER/Q/FSR/RC 全部刚性约束。需要调整 YAML 边界或增加迭代轮数。\n")
+
+    # 触发渲染层
+    plot_botorch_results(out_path)
+
+if __name__ == '__main__':
+    import warnings
+    warnings.filterwarnings('ignore', category=UserWarning) 
+    main()
 
 if __name__ == '__main__':
     import warnings
