@@ -209,14 +209,14 @@ def main():
         candidates, _ = optimize_acqf(
             acq_function=acqf,
             bounds=bounds,
-            q=1,
+            q=config['optimization']['batch_size'],
             num_restarts=5,
             raw_samples=128
             # 删除了 nonlinear_inequality_constraints 行，彻底解决 ic_generator 报错
         )
         
         new_x = candidates.detach()
-        print(f"     推荐候选点: R={new_x[0,0]:.2f} um, gap={new_x[0,1]:.1f} nm, Nd={new_x[0,3]:.1e}")
+        print(f"     推荐候选点: R={new_x[0,0]:.2f} um, gap={new_x[0,1]:.1f} nm, Nd={10**new_x[0,3]:.1e}")
         
         # 3.5 获取真实的物理反馈 (此处用 Mock 数据发生器替代)
         new_y_opt = evaluate_optical_physics(new_x, evaluator)
@@ -238,10 +238,11 @@ def main():
         Y_full = torch.cat([train_Y_opt, det_Y], dim=-1)
         
         # 逆向解析出真实的系统性能指标
-        er_vals = 10.0 - er_con(Y_full)
-        q_vals = 9700.0 - q_lower_con(Y_full)
-        fsr_vals = 6.4e-9 - fsr_con(Y_full)
-        rc_vals = 20e9 - rc_con(Y_full)
+        from core.physics_model import calc_er, calc_q, calc_fsr, calc_rc
+        er_vals = calc_er(Y_full)
+        q_vals = calc_q(Y_full)
+        fsr_vals = calc_fsr(Y_full)
+        rc_vals = calc_rc(Y_full)
         eff_vals = obj_efficiency(Y_full)
         
         # 严苛的刚性约束全量检验
@@ -256,7 +257,7 @@ def main():
         'Radius (um)': train_X[:, 0].numpy(),
         'Gap (nm)': train_X[:, 1].numpy(),
         'Width (nm)': train_X[:, 2].numpy(),
-        'Nd (cm^-3)': train_X[:, 3].numpy(),
+        'Nd (cm^-3)': torch.pow(10.0, train_X[:, 3]).numpy(),
         'r_L': train_X[:, 4].numpy(),
         'ER (dB)': er_vals.numpy(),
         'Q Factor': q_vals.numpy(),
@@ -292,11 +293,6 @@ def main():
 
     # 触发渲染层
     plot_botorch_results(out_path)
-
-if __name__ == '__main__':
-    import warnings
-    warnings.filterwarnings('ignore', category=UserWarning) 
-    main()
 
 if __name__ == '__main__':
     import warnings

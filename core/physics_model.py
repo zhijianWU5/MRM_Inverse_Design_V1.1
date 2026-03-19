@@ -33,8 +33,10 @@ def electrical_and_passthrough(X):
     """
     R = X[..., 0]
     w = X[..., 2]
-    Nd = X[..., 3]
+    Nd_log = X[..., 3]
     rL = X[..., 4]
+    
+    Nd = 10.0 ** Nd_log
     
     # 电学经验常数 (Mock值，后续可通过 CHARGE 离线拟合替换)
     k1, k2, k3, k4 = 1.2e-18, 5.2e-5, 2.8e-10, 1.5e-20
@@ -65,63 +67,65 @@ def compute_a(Y):
     # 显式加入 1e-4 将 um 转换为 cm
     return 10 ** (-alpha_total * np.pi * R * 1e-4 / 20)
 
-def er_con(Y):
-    """消光比约束: ER >= 10 -> 10 - ER <= 0"""
+def calc_er(Y):
+    """计算消光比 ER (dB)"""
     a = compute_a(Y)
     t_mag = Y[..., IDX_T]
     
     numerator = torch.clamp(torch.abs(a - t_mag), min=1e-12)
     denominator = torch.clamp(1 - a * t_mag, min=1e-12)
-    er = -20 * torch.log10(numerator / denominator)
-    return 10.0 - er
+    return -20 * torch.log10(numerator / denominator)
+
+def er_con(Y):
+    """消光比约束: ER >= 10 -> (10 - ER)/10 <= 0"""
+    return (10.0 - calc_er(Y)) / 10.0
+
+def calc_q(Y):
+    """计算品质因数 Q"""
+    a = compute_a(Y)
+    t_mag = Y[..., IDX_T]
+    R = Y[..., IDX_R]
+    w = Y[..., IDX_W]
+    
+    n_g = mock_interpolate_ng(w)
+    lambda0 = 1550e-9
+    
+    denominator = torch.clamp(1 - a * t_mag, min=1e-12)
+    return (np.pi * n_g * 2 * np.pi * R * 1e-6 / lambda0) * torch.sqrt(a * t_mag) / denominator
 
 def q_lower_con(Y):
-    """Q值下限: Q >= 9700 -> 9700 - Q <= 0"""
-    a = compute_a(Y)
-    t_mag = Y[..., IDX_T]
-    R = Y[..., IDX_R]
-    w = Y[..., IDX_W]
-    
-    n_g = mock_interpolate_ng(w)
-    lambda0 = 1550e-9
-    
-    denominator = torch.clamp(1 - a * t_mag, min=1e-12)
-    Q = (np.pi * n_g * 2 * np.pi * R * 1e-6 / lambda0) * torch.sqrt(a * t_mag) / denominator
-    return 9700.0 - Q
+    """Q值下限: Q >= 9700 -> (9700 - Q)/9700 <= 0"""
+    return (9700.0 - calc_q(Y)) / 9700.0
 
 def q_upper_con(Y):
-    """Q值上限: Q <= 10000 -> Q - 10000 <= 0"""
-    a = compute_a(Y)
-    t_mag = Y[..., IDX_T]
-    R = Y[..., IDX_R]
-    w = Y[..., IDX_W]
-    
-    n_g = mock_interpolate_ng(w)
-    lambda0 = 1550e-9
-    
-    denominator = torch.clamp(1 - a * t_mag, min=1e-12)
-    Q = (np.pi * n_g * 2 * np.pi * R * 1e-6 / lambda0) * torch.sqrt(a * t_mag) / denominator
-    return Q - 10000.0
+    """Q值上限: Q <= 10000 -> (Q - 10000)/10000 <= 0"""
+    return (calc_q(Y) - 10000.0) / 10000.0
 
-def rc_con(Y):
-    """RC带宽约束: fRC >= 20GHz -> 20e9 - fRC <= 0"""
+def calc_rc(Y):
+    """计算RC带宽 fRC (Hz)"""
     Cj = Y[..., IDX_CJ]
     Rs = Y[..., IDX_RS]
-    f_rc = 1.0 / (2 * np.pi * Rs * Cj)
-    return 20e9 - f_rc
+    return 1.0 / (2 * np.pi * Rs * Cj)
+
+def rc_con(Y):
+    """RC带宽约束: fRC >= 20GHz -> (20e9 - fRC)/20e9 <= 0"""
+    return (20e9 - calc_rc(Y)) / 20e9
 
 # ==========================================
 # 4. 白盒约束 (统一改为接收 Y，要求 <= 0)
 # ==========================================
-def fsr_con(Y):
-    """FSR约束: FSR >= 6.4nm -> 6.4e-9 - FSR <= 0"""
-    R = Y[..., IDX_R]  # 直接从透传的 Y 中获取半径 R
-    w = Y[..., IDX_W]  # 直接从透传的 Y 中获取波导宽度 w
+def calc_fsr(Y):
+    """计算 FSR (m)"""
+    R = Y[..., IDX_R]
+    w = Y[..., IDX_W]
     n_g = mock_interpolate_ng(w)
     lambda0 = 1550e-9
     
-    fsr = lambda0**2 / (n_g * 2 * np.pi * R * 1e-6)
-    return 6.4e-9 - fsr  # 返回 <= 0 表示满足约束
+    return lambda0**2 / (n_g * 2 * np.pi * R * 1e-6)
+
+def fsr_con(Y):
+    """FSR约束: FSR >= 6.4nm -> (6.4e-9 - FSR)/6.4e-9 <= 0"""
+    return (6.4e-9 - calc_fsr(Y)) / 6.4e-9
 
 # ==========================================
 # 5. 目标函数 (最大化调制效率)
