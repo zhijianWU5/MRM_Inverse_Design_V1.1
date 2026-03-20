@@ -186,8 +186,14 @@ def main():
         model = get_fitted_model(train_X, train_Y_opt, bounds)
         
         # 3.2 定义系统目标函数，并使用 BoTorch 专用的多目标包装器
+        from core.physics_model import calc_q
         def obj_callable(Y, X=None):
-            return torch.stack([obj_efficiency(Y), obj_radius(Y)], dim=-1)
+            eff = obj_efficiency(Y)
+            q_vals = calc_q(Y)
+            # 软惩罚：当 Q > 10000 时，降低效率评分，引导优化器向低 Q 探索
+            penalty = torch.clamp((q_vals - 10000.0) / 10000.0, min=0.0) * 2.0
+            eff_penalized = eff - penalty
+            return torch.stack([eff_penalized, obj_radius(Y)], dim=-1)
             
         mo_objective = GenericMCMultiOutputObjective(obj_callable)
             
@@ -271,13 +277,20 @@ def main():
     })
     
     out_path = 'data/optimization_results.csv'
-    df.to_csv(out_path, index=False)
-    print(f"[System] 物理指标解算完成！原始数据集已保存至 {out_path}")
+    try:
+        df.to_csv(out_path, index=False)
+        print(f"[System] 物理指标解算完成！原始数据集已保存至 {out_path}")
+    except PermissionError:
+        import time
+        out_path = f'data/optimization_results_{int(time.time())}.csv'
+        df.to_csv(out_path, index=False)
+        print(f"\n[错误 - 权限拒绝] 目标文件 {out_path.split('_')[0]}.csv 被其他程序(如Excel)占用！")
+        print(f"[System] 已采取保护措施，临时保存至备用路径: {out_path}")
     
     # 打印最终验收结论
     valid_df = df[df['Is_Valid'] == True]
     if not valid_df.empty:
-        best_idx = (valid_df['Efficiency'] / valid_df['Radius (um)']).idxmax()
+        best_idx = (valid_df['Efficiency (1/V.cm)'] / valid_df['Radius (um)']).idxmax()
         best_pt = valid_df.loc[best_idx]
         print("\n" + "="*45)
         print(" 🎯 发现符合全部刚性物理约束的综合最佳结构：")

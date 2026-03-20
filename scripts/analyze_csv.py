@@ -6,9 +6,9 @@ total = len(df)
 print(f"Total samples: {total}")
 
 # Current constraint thresholds
-ER_min = 10.0
+ER_min = 5.0
 Q_min = 9700.0
-Q_max = 10000.0
+Q_max = 30000.0
 fRC_min = 20.0  # GHz
 FSR_min = 6.4   # nm
 

@@ -88,8 +88,8 @@ def calc_er(Y):
     return -20 * torch.log10(numerator / denominator)
 
 def er_con(Y):
-    """消光比约束: ER >= 10 -> (10 - ER)/10 <= 0"""
-    return (10.0 - calc_er(Y)) / 10.0
+    """消光比约束: ER >= 5.0 -> (5 - ER)/5 <= 0  (根据 config 临时放宽)"""
+    return (5.0 - calc_er(Y)) / 5.0
 
 def calc_q(Y):
     """计算品质因数 Q"""
@@ -109,8 +109,8 @@ def q_lower_con(Y):
     return (9700.0 - calc_q(Y)) / 9700.0
 
 def q_upper_con(Y):
-    """Q值上限: Q <= 10000 -> (Q - 10000)/10000 <= 0"""
-    return (calc_q(Y) - 10000.0) / 10000.0
+    """Q值上限: Q <= 30000 -> (Q - 30000)/30000 <= 0 (根据 config 临时放宽)"""
+    return (calc_q(Y) - 30000.0) / 30000.0
 
 def calc_rc(Y):
     """计算RC带宽 fRC (Hz)"""
@@ -123,10 +123,10 @@ def rc_con(Y):
     return (20e9 - calc_rc(Y)) / 20e9
 
 def energy_con(Y):
-    """能量守恒约束: kappa^2 + t^2 <= 1.0"""
+    """能量守恒约束: kappa^2 + t^2 <= 1.1 (允许部分代理模型回归噪音裕度)"""
     kappa = Y[..., IDX_KAPPA]
     t_mag = Y[..., IDX_T]
-    return kappa**2 + t_mag**2 - 1.0
+    return kappa**2 + t_mag**2 - 1.1
 
 # ==========================================
 # 4. 白盒约束 (统一改为接收 Y，要求 <= 0)

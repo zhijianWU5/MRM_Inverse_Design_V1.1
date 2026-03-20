@@ -29,19 +29,19 @@ def plot_botorch_results(csv_path='data/optimization_results.csv'):
 
     # 图2: 帕累托前沿分析 (Radius vs Modulation Efficiency)
     # 目标：Radius 越小越好（靠左），Efficiency 越大越好（靠上）
-    ax2.scatter(invalid_df['Radius (um)'], invalid_df['Efficiency'], 
+    ax2.scatter(invalid_df['Radius (um)'], invalid_df['Efficiency (1/V.cm)'], 
                 c='lightgray', alpha=0.6, label='Invalid', s=40)
     if not valid_df.empty:
-        sc = ax2.scatter(valid_df['Radius (um)'], valid_df['Efficiency'], 
+        sc = ax2.scatter(valid_df['Radius (um)'], valid_df['Efficiency (1/V.cm)'], 
                          c=valid_df['ER (dB)'], cmap='viridis', edgecolor='black', 
                          s=90, label='Valid (Color=ER)')
         cbar = plt.colorbar(sc, ax=ax2)
         cbar.set_label('Extinction Ratio (dB)')
         
         # 启发式评价：标出“效率与半径性价比”最高的点
-        best_idx = (valid_df['Efficiency'] / valid_df['Radius (um)']).idxmax()
+        best_idx = (valid_df['Efficiency (1/V.cm)'] / valid_df['Radius (um)']).idxmax()
         best_r = valid_df.loc[best_idx, 'Radius (um)']
-        best_eff = valid_df.loc[best_idx, 'Efficiency']
+        best_eff = valid_df.loc[best_idx, 'Efficiency (1/V.cm)']
         ax2.plot(best_r, best_eff, 'r*', markersize=18, label='Optimal Trade-off')
 
     ax2.set_xlabel('Microring Radius (μm)')
