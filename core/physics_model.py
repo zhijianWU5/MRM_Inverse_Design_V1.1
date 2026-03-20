@@ -38,8 +38,19 @@ def electrical_and_passthrough(X):
     
     Nd = 10.0 ** Nd_log
     
-    # 电学经验常数 (Mock值，后续可通过 CHARGE 离线拟合替换)
-    k1, k2, k3, k4 = 1.2e-18, 5.2e-5, 2.8e-10, 1.5e-20
+    # 电学经验常数 (真实物理基准量级校准)
+    # k1 适配电容 Cj: 设定目标 Cj ~ 50 fF (5e-14 F) at Nd=1e18
+    # k1 * sqrt(1e18) = 5e-14 -> k1 = 5.0e-23
+    k1 = 5.0e-23
+    # k2 适配串联电阻 Rs: Rs 与掺杂成反比, 设定目标 Rs ~ 100 Ohm at w=450, Nd=1e18
+    # k2 * (450 / 1e18) = 100 -> k2 = 2.2e17
+    k2 = 2.2e17
+    # k3 适配折射率有效变化 (等效 1V bias 下的 modal dn)
+    # 设 k3 = 4.0e-19, 使得 Nd=1e18 时 dn 约 1e-4, 对应 VpiL 约 0.77 V.cm
+    k3 = 4.0e-19
+    # k4 适配静态传输损耗 dalpha (对应 dB/cm，背景掺杂吸收)
+    # 设 k4 = 2.0e-17, 使得 Nd=1e18 时 dalpha 约 20 dB/cm
+    k4 = 2.0e-17
     
     Cj = k1 * torch.sqrt(Nd)
     Rs = k2 * (w / Nd)
@@ -64,8 +75,8 @@ def compute_a(Y):
     
     Ld = rL * 2 * np.pi * R
     alpha_total = alpha_pass + (Ld / (2 * np.pi * R)) * dalpha
-    # 显式加入 1e-4 将 um 转换为 cm
-    return 10 ** (-alpha_total * np.pi * R * 1e-4 / 20)
+    # 圆周单程长度为 2 * pi * R * 1e-4 cm
+    return 10 ** (-alpha_total * 2 * np.pi * R * 1e-4 / 20)
 
 def calc_er(Y):
     """计算消光比 ER (dB)"""
@@ -111,6 +122,12 @@ def rc_con(Y):
     """RC带宽约束: fRC >= 20GHz -> (20e9 - fRC)/20e9 <= 0"""
     return (20e9 - calc_rc(Y)) / 20e9
 
+def energy_con(Y):
+    """能量守恒约束: kappa^2 + t^2 <= 1.0"""
+    kappa = Y[..., IDX_KAPPA]
+    t_mag = Y[..., IDX_T]
+    return kappa**2 + t_mag**2 - 1.0
+
 # ==========================================
 # 4. 白盒约束 (统一改为接收 Y，要求 <= 0)
 # ==========================================
@@ -130,18 +147,15 @@ def fsr_con(Y):
 # ==========================================
 # 5. 目标函数 (最大化调制效率)
 # ==========================================
+def calc_vpi_l(Y):
+    """计算 Vpi * L, 典型单位 V.cm"""
+    dn = torch.abs(Y[..., IDX_DN])
+    lambda0 = 1550e-7 # cm
+    return lambda0 / (2 * torch.clamp(dn, min=1e-12)) # V.cm
+
 def obj_efficiency(Y):
-    """计算调制效率 η_m"""
-    dn = Y[..., IDX_DN]
-    rL = Y[..., IDX_RL]
-    w = Y[..., IDX_W]
-    n_g = mock_interpolate_ng(w)
-    
-    lambda0 = 1550.0 # nm
-    V_op = 1.0
-    
-    eta_m = torch.abs(dn / (n_g * V_op)) * rL * lambda0
-    return eta_m
+    """计算调制效率 η_m = 1 / (Vpi * L) (越大越好)"""
+    return 1.0 / calc_vpi_l(Y)
 
 def obj_radius(Y):
     """最小化半径 R (通过最大化 -R 实现)"""

@@ -22,8 +22,8 @@ from botorch.posteriors.posterior import Posterior
 
 from core.physics_model import (
     electrical_and_passthrough, 
-    er_con, q_lower_con, q_upper_con, rc_con, fsr_con,
-    obj_efficiency, obj_radius
+    er_con, q_lower_con, q_upper_con, rc_con, fsr_con, energy_con,
+    obj_efficiency, obj_radius, calc_vpi_l
 )
 
 # 强制全局使用双精度浮点数，保障临界耦合与矩阵计算的数值稳定性
@@ -200,8 +200,8 @@ def main():
             ref_point=ref_point, 
             X_baseline=train_X,
             objective=mo_objective,
-            # 将 fsr_con 加入输出约束列表！
-            constraints=[er_con, q_lower_con, q_upper_con, rc_con, fsr_con] 
+            # 将 fsr_con 和 energy_con 加入输出约束列表！
+            constraints=[er_con, q_lower_con, q_upper_con, rc_con, fsr_con, energy_con] 
         )
         
         # 3.4 优化采集函数 (自动求导寻找下一个最佳采样点)
@@ -238,19 +238,21 @@ def main():
         Y_full = torch.cat([train_Y_opt, det_Y], dim=-1)
         
         # 逆向解析出真实的系统性能指标
-        from core.physics_model import calc_er, calc_q, calc_fsr, calc_rc
+        from core.physics_model import calc_er, calc_q, calc_fsr, calc_rc, calc_vpi_l
         er_vals = calc_er(Y_full)
         q_vals = calc_q(Y_full)
         fsr_vals = calc_fsr(Y_full)
         rc_vals = calc_rc(Y_full)
         eff_vals = obj_efficiency(Y_full)
+        vpil_vals = calc_vpi_l(Y_full)
         
         # 严苛的刚性约束全量检验
         valid_mask = (er_con(Y_full) <= 0) & \
                      (q_lower_con(Y_full) <= 0) & \
                      (q_upper_con(Y_full) <= 0) & \
                      (rc_con(Y_full) <= 0) & \
-                     (fsr_con(Y_full) <= 0)
+                     (fsr_con(Y_full) <= 0) & \
+                     (energy_con(Y_full) <= 0)
 
     # 组装为格式化的 DataFrame
     df = pd.DataFrame({
@@ -263,7 +265,8 @@ def main():
         'Q Factor': q_vals.numpy(),
         'FSR (nm)': fsr_vals.numpy() * 1e9,
         'f_RC (GHz)': rc_vals.numpy() / 1e9,
-        'Efficiency': eff_vals.numpy(),
+        'VpiL (V.cm)': vpil_vals.numpy(),
+        'Efficiency (1/V.cm)': eff_vals.numpy(),
         'Is_Valid': valid_mask.numpy()
     })
     
