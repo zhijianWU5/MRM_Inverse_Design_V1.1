@@ -13,9 +13,9 @@ class MRMEvaluator:
         # 实例化 Lumerical 引擎
         self.engine = LumericalEngine(fsp_file_path=full_fsp_path)
 
-    def run_physical_simulation(self, radius, gap, width):
+    def run_physical_simulation(self, radius, gap, width, Lc=0.0):
         """调用 Lumerical 引擎并返回 [kappa, t_mag, phi, alpha_pass]"""
-        kappa, t, phi, alpha = self.engine.evaluate_mrm(radius, gap, width)
+        kappa, t, phi, alpha = self.engine.evaluate_mrm(radius, gap, width, Lc)
         return kappa, t, phi, alpha
         
     def shutdown(self):

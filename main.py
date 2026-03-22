@@ -41,9 +41,10 @@ def evaluate_optical_physics(X_tensor, evaluator):
         r = X_tensor[i, 0].item()
         g = X_tensor[i, 1].item()
         w = X_tensor[i, 2].item()
+        Lc = X_tensor[i, 5].item()
         
-        print(f"     [FDTD] 正在仿真样本 {i+1}/{X_tensor.shape[0]}: R={r:.2f} um, gap={g:.1f} nm, w={w:.1f} nm...")
-        kappa, t_mag, phi, alpha_pass = evaluator.run_physical_simulation(r, g, w)
+        print(f"     [FDTD] 正在仿真样本 {i+1}/{X_tensor.shape[0]}: R={r:.2f} um, gap={g:.1f} nm, w={w:.1f} nm, Lc={Lc:.2f} um...")
+        kappa, t_mag, phi, alpha_pass = evaluator.run_physical_simulation(r, g, w, Lc)
         Y_list.append([kappa, t_mag, phi, alpha_pass])
         
     return torch.tensor(Y_list, dtype=torch.float64)
@@ -128,8 +129,8 @@ class CombinedModel(Model):
         
     @property
     def num_outputs(self):
-        # 4 (光学代理) + 7 (电学与几何透传) = 11维特征输出
-        return self.gp_model.num_outputs + 7 
+        # 4 (光学代理) + 8 (电学与几何透传) = 12维特征输出
+        return self.gp_model.num_outputs + 8 
         
     def posterior(self, X, observation_noise=False, posterior_transform=None):
         # 1. 物理经验公式前向传播计算 (自动挂载 Autograd 梯度链)
@@ -146,7 +147,7 @@ def get_fitted_model(train_X, train_Y_opt, bounds):
     gp_optical = SingleTaskGP(
         train_X, 
         train_Y_opt,
-        input_transform=Normalize(d=5, bounds=bounds),
+        input_transform=Normalize(d=6, bounds=bounds),
         outcome_transform=Standardize(m=4)
     )
     mll = ExactMarginalLogLikelihood(gp_optical.likelihood, gp_optical)
@@ -168,12 +169,13 @@ def main():
         [float(v) for v in b_dict['gap']], 
         [float(v) for v in b_dict['width']], 
         [float(v) for v in b_dict['Nd']], 
-        [float(v) for v in b_dict['rL']]
+        [float(v) for v in b_dict['rL']],
+        [float(v) for v in b_dict['Lc']]
     ], dtype=torch.float64).T
     
     # 2. 初始化 LHS 采样 (此处简单使用随机采样代替)
     init_points = config['optimization']['init_points']
-    train_X = bounds[0] + (bounds[1] - bounds[0]) * torch.rand(init_points, 5)
+    train_X = bounds[0] + (bounds[1] - bounds[0]) * torch.rand(init_points, 6)
     print(f"\n[System] 开始执行 {init_points} 个初始 LHS 采样点的真机仿真 (这可能需要几分钟)...")
     train_Y_opt = evaluate_optical_physics(train_X, evaluator)
     
@@ -222,7 +224,7 @@ def main():
         )
         
         new_x = candidates.detach()
-        print(f"     推荐候选点: R={new_x[0,0]:.2f} um, gap={new_x[0,1]:.1f} nm, Nd={10**new_x[0,3]:.1e}")
+        print(f"     推荐候选点: R={new_x[0,0]:.2f} um, gap={new_x[0,1]:.1f} nm, Lc={new_x[0,5]:.2f} um, Nd={10**new_x[0,3]:.1e}")
         
         # 3.5 获取真实的物理反馈 (此处用 Mock 数据发生器替代)
         new_y_opt = evaluate_optical_physics(new_x, evaluator)
@@ -268,6 +270,7 @@ def main():
         'Width (nm)': train_X[:, 2].numpy(),
         'Nd (cm^-3)': torch.pow(10.0, train_X[:, 3]).numpy(),
         'r_L': train_X[:, 4].numpy(),
+        'Lc (um)': train_X[:, 5].numpy(),
         'ER (dB)': er_vals.numpy(),
         'Q Factor': q_vals.numpy(),
         'FSR (nm)': fsr_vals.numpy() * 1e9,
@@ -299,6 +302,7 @@ def main():
         print("="*45)
         print(f" [几何参数] 半径 R     = {best_pt['Radius (um)']:.3f} μm")
         print(f" [几何参数] 间距 gap   = {best_pt['Gap (nm)']:.1f} nm")
+        print(f" [几何参数] 耦合段 Lc  = {best_pt['Lc (um)']:.2f} μm")
         print(f" [电学参数] 掺杂 Nd    = {best_pt['Nd (cm^-3)']:.2e} cm⁻³")
         print("-" * 45)
         print(f" [系统指标] 消光比 ER  = {best_pt['ER (dB)']:.2f} dB (>=10)")

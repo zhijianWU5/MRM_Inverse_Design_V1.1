@@ -1,9 +1,9 @@
 # ==========================================================
-# 自动构建 MRM 耦合区参数化 FDTD 模板 (Lightweight DC Builder)
+# 自动构建 MRM 跑道型耦合区参数化 FDTD 模板 (Racetrack DC Builder)
 # ==========================================================
 newproject;
 
-# 1. 添加参数化结构组 (与之前相同，接收Python变量)
+# 1. 添加参数化结构组 (接收Python变量)
 addstructuregroup;
 set("name", "MRM_Structure");
 set("x", 0); set("y", 0); set("z", 0);
@@ -12,6 +12,7 @@ adduserprop("radius", 2, 10e-6);
 adduserprop("gap", 2, 200e-9);
 adduserprop("width", 2, 500e-9);
 adduserprop("thickness", 2, 220e-9);
+adduserprop("coupling_length", 2, 0);  # 跑道直线段长度 (m), 0=纯圆环
 
 setup_script = "
     deleteall; 
@@ -19,64 +20,120 @@ setup_script = "
     # 核心几何逻辑：将 gap 的绝对中心强行锚定在 Y=0
     y_bus = -gap/2 - width/2;
     y_ring_center = gap/2 + width/2 + radius;
+    Lc = coupling_length;
     
-    # 建立直波导 (Bus Waveguide)
+    # 建立直波导 (Bus Waveguide) - 长度需覆盖耦合段
+    bus_length = 15e-6 + Lc;
     addrect;
     set('name', 'bus_waveguide');
     set('x', 0); set('y', y_bus); set('z', 0);
-    set('x span', 15e-6); # 足够穿透FDTD区域即可
+    set('x span', bus_length);
     set('y span', width);
     set('z span', thickness);
     set('material', 'Si (Silicon) - Palik');
     
-    # 建立微环 (Ring Resonator)
-    addring;
-    set('name', 'ring');
-    set('x', 0); 
-    set('y', y_ring_center); 
-    set('z', 0);
-    set('outer radius', radius + width/2);
-    set('inner radius', radius - width/2);
-    set('z span', thickness);
-    set('material', 'Si (Silicon) - Palik');
+    if (Lc > 0) {
+        # ========== 跑道型微环 (Racetrack) ==========
+        # 由两个半圆弧 + 两条直线段组成
+        
+        # 左半圆弧
+        addring;
+        set('name', 'ring_left');
+        set('x', -Lc/2); 
+        set('y', y_ring_center); 
+        set('z', 0);
+        set('outer radius', radius + width/2);
+        set('inner radius', radius - width/2);
+        set('z span', thickness);
+        set('theta start', 90);
+        set('theta stop', 270);
+        set('material', 'Si (Silicon) - Palik');
+        
+        # 右半圆弧
+        addring;
+        set('name', 'ring_right');
+        set('x', Lc/2); 
+        set('y', y_ring_center); 
+        set('z', 0);
+        set('outer radius', radius + width/2);
+        set('inner radius', radius - width/2);
+        set('z span', thickness);
+        set('theta start', -90);
+        set('theta stop', 90);
+        set('material', 'Si (Silicon) - Palik');
+        
+        # 下方直线段 (耦合段，靠近直波导)
+        addrect;
+        set('name', 'straight_bottom');
+        set('x', 0);
+        set('y', gap/2 + width/2);
+        set('z', 0);
+        set('x span', Lc);
+        set('y span', width);
+        set('z span', thickness);
+        set('material', 'Si (Silicon) - Palik');
+        
+        # 上方直线段 (远离直波导)
+        addrect;
+        set('name', 'straight_top');
+        set('x', 0);
+        set('y', y_ring_center + radius);
+        set('z', 0);
+        set('x span', Lc);
+        set('y span', width);
+        set('z span', thickness);
+        set('material', 'Si (Silicon) - Palik');
+        
+    } else {
+        # ========== 传统圆环 (Ring) ==========
+        addring;
+        set('name', 'ring');
+        set('x', 0); 
+        set('y', y_ring_center); 
+        set('z', 0);
+        set('outer radius', radius + width/2);
+        set('inner radius', radius - width/2);
+        set('z span', thickness);
+        set('material', 'Si (Silicon) - Palik');
+    }
 ";
 set("script", setup_script);
 
-# 2. 🚨 添加 FDTD 仿真区域 (大幅缩减体积！)
+# 2. 添加 FDTD 仿真区域 (自动适配跑道长度)
 addfdtd;
 set("x", 0); set("y", 0.5e-6); set("z", 0);
-set("x span", 8e-6);   # X方向仅取8um，包围耦合区
-set("y span", 5e-6);   # Y方向覆盖直波导和微环底部
+set("x span", 12e-6);  # X方向加宽以容纳跑道直线段
+set("y span", 5e-6);
 set("z span", 2e-6);
-set("mesh accuracy", 1); # 保持1极速仿真
+set("mesh accuracy", 1);
 
 # 3. 添加模式光源 (Mode Source)
 addmode;
 set("name", "source");
 set("injection axis", "x-axis");
 set("direction", "Forward");
-set("x", -3.5e-6); 
-set("y", -0.35e-6);    # 设在偏下方，包含所有可能宽度的直波导
+set("x", -5.5e-6); 
+set("y", -0.35e-6);
 set("y span", 2e-6); set("z span", 2e-6);
 set("center wavelength", 1.55e-6);
 set("wavelength span", 0.1e-6);
 
-# 4. 添加直通端监视器 (Through Port，用于提取 t)
+# 4. 添加直通端监视器 (Through Port)
 addpower;
 set("name", "through_port");
 set("monitor type", "2D X-normal");
-set("x", 3.5e-6); 
+set("x", 5.5e-6); 
 set("y", -0.35e-6); 
 set("y span", 2e-6); set("z span", 2e-6);
 
-# 5. 添加交叉端监视器 (Cross Port，用于提取 kappa)
+# 5. 添加交叉端监视器 (Cross Port)
 addpower;
 set("name", "cross_port");
 set("monitor type", "2D X-normal");
-set("x", 3.5e-6); 
-set("y", 1.0e-6);      # 设在上方，完美拦截向上弯曲耦合进微环的光
+set("x", 5.5e-6); 
+set("y", 1.0e-6);
 set("y span", 2.0e-6); set("z span", 2e-6);
 
 # 6. 保存新模板
 save("mrm_dc_template.fsp");
-print("轻量级耦合区模板生成成功！请将其放入 data 文件夹。");
+print("跑道型耦合区参数化模板生成成功！请将其放入 data 文件夹。");

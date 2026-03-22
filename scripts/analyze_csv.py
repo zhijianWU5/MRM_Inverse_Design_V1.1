@@ -33,7 +33,7 @@ print(f"FSR Failure (< {FSR_min} nm): {fsr_fail.sum()} ({fsr_fail.sum()/total*10
 # We want ER >= new_ER_min, Q in new_Q_range, fRC >= new_fRC_min, FSR >= new_FSR_min
 # Let's see the distributions
 print("\n--- Value distributions (quantiles) ---")
-for col in ['ER (dB)', 'Q Factor', 'f_EO (GHz)', 'FSR (nm)']:
+for col in ['ER (dB)', 'Q Factor', 'f_EO (GHz)', 'FSR (nm)', 'Lc (um)']:
     quantiles = df[col].quantile([0.1, 0.25, 0.5, 0.75, 0.9])
     print(f"\n{col}:")
     print(quantiles)

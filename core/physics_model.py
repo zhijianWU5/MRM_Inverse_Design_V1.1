@@ -14,7 +14,7 @@ IDX_T = 1
 IDX_PHI = 2
 IDX_ALPHA_PASS = 3
 
-# 电学确定性模型透传输出索引 (4-10)
+# 电学确定性模型透传输出索引 (4-11)
 IDX_R = 4
 IDX_W = 5
 IDX_RL = 6
@@ -22,34 +22,28 @@ IDX_DN = 7
 IDX_DALPHA = 8
 IDX_CJ = 9
 IDX_RS = 10
+IDX_LC = 11  # 跑道型直线耦合段长度 (um)
 
 # ==========================================
 # 2. 电学经验公式与变量透传层
 # ==========================================
 def electrical_and_passthrough(X):
     """
-    接收设计变量 X [R, gap, w, Nd, rL] (5维)
-    输出 [R, w, rL, dn, dalpha, Cj, Rs] (7维)
+    接收设计变量 X [R, gap, w, Nd, rL, Lc] (6维)
+    输出 [R, w, rL, dn, dalpha, Cj, Rs, Lc] (8维)
     """
     R = X[..., 0]
     w = X[..., 2]
     Nd_log = X[..., 3]
     rL = X[..., 4]
+    Lc = X[..., 5]
     
     Nd = 10.0 ** Nd_log
     
     # 电学经验常数 (真实物理基准量级校准)
-    # k1 适配电容 Cj: 设定目标 Cj ~ 50 fF (5e-14 F) at Nd=1e18
-    # k1 * sqrt(1e18) = 5e-14 -> k1 = 5.0e-23
     k1 = 5.0e-23
-    # k2 适配串联电阻 Rs: Rs 与掺杂成反比, 设定目标 Rs ~ 100 Ohm at w=450, Nd=1e18
-    # k2 * (450 / 1e18) = 100 -> k2 = 2.2e17
     k2 = 2.2e17
-    # k3 适配折射率有效变化 (等效 1V bias 下的 modal dn)
-    # 设 k3 = 4.0e-19, 使得 Nd=1e18 时 dn 约 1e-4, 对应 VpiL 约 0.77 V.cm
     k3 = 4.0e-19
-    # k4 适配静态传输损耗 dalpha (对应 dB/cm，背景掺杂吸收)
-    # 设 k4 = 2.0e-17, 使得 Nd=1e18 时 dalpha 约 20 dB/cm
     k4 = 2.0e-17
     
     Cj = k1 * torch.sqrt(Nd)
@@ -57,11 +51,17 @@ def electrical_and_passthrough(X):
     dn = -k3 * torch.pow(Nd, 0.8)
     dalpha = k4 * Nd
     
-    return torch.stack([R, w, rL, dn, dalpha, Cj, Rs], dim=-1)
+    return torch.stack([R, w, rL, dn, dalpha, Cj, Rs, Lc], dim=-1)
 
 def mock_interpolate_ng(w):
     """简单的群折射率插值Mock函数"""
     return 4.0 - (w - 400.0) * 1e-4
+
+def calc_Lrt(Y):
+    """计算跑道型微环的总往返周长 Lrt (um)"""
+    R = Y[..., IDX_R]
+    Lc = Y[..., IDX_LC]
+    return 2 * np.pi * R + 2 * Lc
 
 # ==========================================
 # 3. 灰盒约束函数 (传给 qNEHVI，要求 <= 0)
@@ -72,11 +72,12 @@ def compute_a(Y):
     dalpha = Y[..., IDX_DALPHA]
     R = Y[..., IDX_R]
     rL = Y[..., IDX_RL]
+    Lrt = calc_Lrt(Y)  # um
     
-    Ld = rL * 2 * np.pi * R
-    alpha_total = alpha_pass + (Ld / (2 * np.pi * R)) * dalpha
-    # 圆周单程长度为 2 * pi * R * 1e-4 cm
-    return 10 ** (-alpha_total * 2 * np.pi * R * 1e-4 / 20)
+    Ld = rL * Lrt  # 掺杂区长度 (um)
+    alpha_total = alpha_pass + (Ld / Lrt) * dalpha
+    # 单程长度 Lrt * 1e-4 cm
+    return 10 ** (-alpha_total * Lrt * 1e-4 / 20)
 
 def calc_er(Y):
     """计算消光比 ER (dB)"""
@@ -92,17 +93,17 @@ def er_con(Y):
     return (4.0 - calc_er(Y)) / 4.0
 
 def calc_q(Y):
-    """计算品质因数 Q"""
+    """计算品质因数 Q (使用跑道周长)"""
     a = compute_a(Y)
     t_mag = Y[..., IDX_T]
-    R = Y[..., IDX_R]
     w = Y[..., IDX_W]
+    Lrt = calc_Lrt(Y)  # um
     
     n_g = mock_interpolate_ng(w)
     lambda0 = 1550e-9
     
     denominator = torch.clamp(1 - a * t_mag, min=1e-12)
-    return (np.pi * n_g * 2 * np.pi * R * 1e-6 / lambda0) * torch.sqrt(a * t_mag) / denominator
+    return (np.pi * n_g * Lrt * 1e-6 / lambda0) * torch.sqrt(a * t_mag) / denominator
 
 def q_lower_con(Y):
     """Q值下限: Q >= 4000 -> (4000 - Q)/4000 <= 0"""
@@ -144,13 +145,13 @@ def energy_con(Y):
 # 4. 白盒约束 (统一改为接收 Y，要求 <= 0)
 # ==========================================
 def calc_fsr(Y):
-    """计算 FSR (m)"""
-    R = Y[..., IDX_R]
+    """计算 FSR (m) - 使用跑道周长"""
     w = Y[..., IDX_W]
+    Lrt = calc_Lrt(Y)  # um
     n_g = mock_interpolate_ng(w)
     lambda0 = 1550e-9
     
-    return lambda0**2 / (n_g * 2 * np.pi * R * 1e-6)
+    return lambda0**2 / (n_g * Lrt * 1e-6)
 
 def fsr_con(Y):
     """FSR约束: FSR >= 6.4nm -> (6.4e-9 - FSR)/6.4e-9 <= 0"""
