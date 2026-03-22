@@ -22,7 +22,7 @@ from botorch.posteriors.posterior import Posterior
 
 from core.physics_model import (
     electrical_and_passthrough, 
-    er_con, q_lower_con, q_upper_con, rc_con, fsr_con, energy_con,
+    er_con, q_lower_con, q_upper_con, eo_con, fsr_con, energy_con,
     obj_efficiency, obj_radius, calc_vpi_l
 )
 
@@ -206,8 +206,8 @@ def main():
             ref_point=ref_point, 
             X_baseline=train_X,
             objective=mo_objective,
-            # 将 fsr_con 和 energy_con 加入输出约束列表！
-            constraints=[er_con, q_lower_con, q_upper_con, rc_con, fsr_con, energy_con] 
+            # 将 eo_con 取代 rc_con 加入系统约束列表
+            constraints=[er_con, q_lower_con, q_upper_con, eo_con, fsr_con, energy_con] 
         )
         
         # 3.4 优化采集函数 (自动求导寻找下一个最佳采样点)
@@ -244,11 +244,12 @@ def main():
         Y_full = torch.cat([train_Y_opt, det_Y], dim=-1)
         
         # 逆向解析出真实的系统性能指标
-        from core.physics_model import calc_er, calc_q, calc_fsr, calc_rc, calc_vpi_l
+        from core.physics_model import calc_er, calc_q, calc_fsr, calc_rc, calc_f_eo, calc_vpi_l
         er_vals = calc_er(Y_full)
         q_vals = calc_q(Y_full)
         fsr_vals = calc_fsr(Y_full)
         rc_vals = calc_rc(Y_full)
+        eo_vals = calc_f_eo(Y_full)
         eff_vals = obj_efficiency(Y_full)
         vpil_vals = calc_vpi_l(Y_full)
         
@@ -256,7 +257,7 @@ def main():
         valid_mask = (er_con(Y_full) <= 0) & \
                      (q_lower_con(Y_full) <= 0) & \
                      (q_upper_con(Y_full) <= 0) & \
-                     (rc_con(Y_full) <= 0) & \
+                     (eo_con(Y_full) <= 0) & \
                      (fsr_con(Y_full) <= 0) & \
                      (energy_con(Y_full) <= 0)
 
@@ -271,6 +272,7 @@ def main():
         'Q Factor': q_vals.numpy(),
         'FSR (nm)': fsr_vals.numpy() * 1e9,
         'f_RC (GHz)': rc_vals.numpy() / 1e9,
+        'f_EO (GHz)': eo_vals.numpy() / 1e9,
         'VpiL (V.cm)': vpil_vals.numpy(),
         'Efficiency (1/V.cm)': eff_vals.numpy(),
         'Is_Valid': valid_mask.numpy()
@@ -300,8 +302,9 @@ def main():
         print(f" [电学参数] 掺杂 Nd    = {best_pt['Nd (cm^-3)']:.2e} cm⁻³")
         print("-" * 45)
         print(f" [系统指标] 消光比 ER  = {best_pt['ER (dB)']:.2f} dB (>=10)")
-        print(f" [系统指标] 品质因数 Q  = {best_pt['Q Factor']:.0f} (9700~10000)")
-        print(f" [系统指标] RC带宽     = {best_pt['f_RC (GHz)']:.1f} GHz (>=20)")
+        print(f" [系统指标] 品质因数 Q  = {best_pt['Q Factor']:.0f} (4000~10000)")
+        print(f" [系统指标] RC带宽     = {best_pt['f_RC (GHz)']:.1f} GHz")
+        print(f" [系统指标] 联合电光带宽  = {best_pt['f_EO (GHz)']:.1f} GHz (>=25)")
         print(f" [系统指标] FSR        = {best_pt['FSR (nm)']:.2f} nm (>=6.4)")
         print("="*45 + "\n")
     else:

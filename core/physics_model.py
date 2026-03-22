@@ -88,8 +88,8 @@ def calc_er(Y):
     return -20 * torch.log10(numerator / denominator)
 
 def er_con(Y):
-    """消光比约束: ER >= 5.0 -> (5 - ER)/5 <= 0  (根据 config 临时放宽)"""
-    return (5.0 - calc_er(Y)) / 5.0
+    """消光比约束: ER >= 4.0 -> (4 - ER)/4 <= 0"""
+    return (4.0 - calc_er(Y)) / 4.0
 
 def calc_q(Y):
     """计算品质因数 Q"""
@@ -105,12 +105,12 @@ def calc_q(Y):
     return (np.pi * n_g * 2 * np.pi * R * 1e-6 / lambda0) * torch.sqrt(a * t_mag) / denominator
 
 def q_lower_con(Y):
-    """Q值下限: Q >= 9700 -> (9700 - Q)/9700 <= 0"""
-    return (9700.0 - calc_q(Y)) / 9700.0
+    """Q值下限: Q >= 4000 -> (4000 - Q)/4000 <= 0"""
+    return (4000.0 - calc_q(Y)) / 4000.0
 
 def q_upper_con(Y):
-    """Q值上限: Q <= 30000 -> (Q - 30000)/30000 <= 0 (根据 config 临时放宽)"""
-    return (calc_q(Y) - 30000.0) / 30000.0
+    """Q值上限: Q <= 10000 -> (Q - 10000)/10000 <= 0"""
+    return (calc_q(Y) - 10000.0) / 10000.0
 
 def calc_rc(Y):
     """计算RC带宽 fRC (Hz)"""
@@ -118,9 +118,21 @@ def calc_rc(Y):
     Rs = Y[..., IDX_RS]
     return 1.0 / (2 * np.pi * Rs * Cj)
 
-def rc_con(Y):
-    """RC带宽约束: fRC >= 20GHz -> (20e9 - fRC)/20e9 <= 0"""
-    return (20e9 - calc_rc(Y)) / 20e9
+def calc_f_opt(Y):
+    """计算光学带宽 f_opt (Hz) = ν_0 / Q"""
+    Q = calc_q(Y)
+    nu_0 = 193.55e12 # 1550nm 对应的光频率(Hz)
+    return nu_0 / torch.clamp(Q, min=1.0)
+
+def calc_f_eo(Y):
+    """计算联合电光响应带宽 f_EO (Hz)"""
+    f_rc = calc_rc(Y)
+    f_opt = calc_f_opt(Y)
+    return 1.0 / torch.sqrt(1.0 / torch.pow(f_rc, 2) + 1.0 / torch.pow(f_opt, 2))
+
+def eo_con(Y):
+    """总电光带宽约束: f_EO >= 25GHz -> (25e9 - f_EO)/25e9 <= 0"""
+    return (25e9 - calc_f_eo(Y)) / 25e9
 
 def energy_con(Y):
     """能量守恒约束: kappa^2 + t^2 <= 1.1 (允许部分代理模型回归噪音裕度)"""
