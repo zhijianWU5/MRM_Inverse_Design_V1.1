@@ -23,7 +23,7 @@ from botorch.posteriors.posterior import Posterior
 from core.physics_model import (
     electrical_and_passthrough, 
     er_con, q_lower_con, q_upper_con, eo_con, fsr_con, energy_con,
-    obj_efficiency, obj_radius, calc_vpi_l
+    obj_efficiency, obj_radius, obj_low_doping, calc_vpi_l
 )
 
 # 强制全局使用双精度浮点数，保障临界耦合与矩阵计算的数值稳定性
@@ -195,13 +195,13 @@ def main():
             # 软惩罚：当 Q > 10000 时，降低效率评分，引导优化器向低 Q 探索
             penalty = torch.clamp((q_vals - 10000.0) / 10000.0, min=0.0) * 2.0
             eff_penalized = eff - penalty
-            return torch.stack([eff_penalized, obj_radius(Y)], dim=-1)
+            return torch.stack([eff_penalized, obj_radius(Y), obj_low_doping(Y)], dim=-1)
             
         mo_objective = GenericMCMultiOutputObjective(obj_callable)
             
         # 3.3 构建采集函数 qLogNEHVI (采用对数版本，解决数值下溢问题)
         # 设定帕累托前沿参考点 (基线要求: η_m 下限，-R 下限)
-        ref_point = torch.tensor([0.0, -30.0])
+        ref_point = torch.tensor([0.0, -30.0, -1e-1])
         
         acqf = qLogNoisyExpectedHypervolumeImprovement(
             model=model,
@@ -218,8 +218,8 @@ def main():
             acq_function=acqf,
             bounds=bounds,
             q=config['optimization']['batch_size'],
-            num_restarts=5,
-            raw_samples=128
+            num_restarts=10,
+            raw_samples=256
             # 删除了 nonlinear_inequality_constraints 行，彻底解决 ic_generator 报错
         )
         

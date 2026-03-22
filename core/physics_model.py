@@ -132,8 +132,8 @@ def calc_f_eo(Y):
     return 1.0 / torch.sqrt(1.0 / torch.pow(f_rc, 2) + 1.0 / torch.pow(f_opt, 2))
 
 def eo_con(Y):
-    """总电光带宽约束: f_EO >= 25GHz -> (25e9 - f_EO)/25e9 <= 0"""
-    return (25e9 - calc_f_eo(Y)) / 25e9
+    """总电光带宽约束: f_EO >= 20GHz -> (20e9 - f_EO)/20e9 <= 0"""
+    return (20e9 - calc_f_eo(Y)) / 20e9
 
 def energy_con(Y):
     """能量守恒约束: kappa^2 + t^2 <= 1.1 (允许部分代理模型回归噪音裕度)"""
@@ -173,3 +173,9 @@ def obj_efficiency(Y):
 def obj_radius(Y):
     """最小化半径 R (通过最大化 -R 实现)"""
     return -Y[..., IDX_R]
+
+def obj_low_doping(Y):
+    """最小化掺杂浓度 (通过最大化 -dalpha 实现, dalpha = k4*Nd 单调递增)
+    鼓励优化器在满足约束的前提下选择更低的掺杂，提升器件可靠性"""
+    dalpha = Y[..., IDX_DALPHA]
+    return -dalpha
