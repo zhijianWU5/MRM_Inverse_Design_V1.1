@@ -1,0 +1,29 @@
+Ansys Lumerical 2023 R2.2 FDTD Solver Version 8.30.3536 (Windows 64bit)
+ expires (month/day/year): 12/31/2035
+using config file: Ansys Licensing set with ANSYSLMD_LICENSE_FILE
+license host: 1055@localhost
+current time: 周日 3月 22 20:39:32 2026
+Running on host: WUTHERBOOK
+host available memory (GB): 5.766603
+All processes are communicating and ready to proceed to simulation...
+Running fsp file: D:\Program Files\Lumerical\v232\bin\fdtd-engine.exe -t 1 -remote -shared-solve-license QU5TWVNfTElDRU5TSU5HX0NPTlRFWFRfREFUQT08QU5TWVNfTElDRU5TSU5HX0NPTlRFWFRfREFUQT48SUQ+MTYwY2RmMzctY2NiOC00OGY2LWFhNTAtZTlhZTc0ZDI1MGU3PC9JRD48VFlQRT5IUENfUEFSQU1FVFJJQzwvVFlQRT48TkFNRT5IUEMgUGFyYW1ldHJpYzwvTkFNRT48SEFORExFUj41MjAzNkBXVVRIRVJCT09LPC9IQU5ETEVSPjwvQU5TWVNfTElDRU5TSU5HX0NPTlRFWFRfREFUQT4K D:/MRM_Inverse_Design_V1.1/data/FDTD_Vaidation.fsp
+Starting meshing
+Simulation size in gridpoints: 1 x 80 x 257
+Refined 0 mesh cells (0%)
+Completed meshing!
+Meshing complete in 0 seconds of CPU time
+Starting meshing
+Simulation size in gridpoints: 1 x 80 x 257
+Refined 0 mesh cells (0%)
+Completed meshing!
+Meshing complete in 0 seconds of CPU time
+Starting meshing
+Simulation size in gridpoints: 1 x 80 x 257
+Refined 0 mesh cells (0%)
+Completed meshing!
+Meshing complete in 0 seconds of CPU time
+number of processors is 1
+processors are distributed as: 1x1x1
+Running 3D Simulation
+Starting meshing
+Simulation size in gridpoints: 1656 x 997 x 271

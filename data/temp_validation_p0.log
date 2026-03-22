@@ -1,0 +1,76 @@
+Ansys Lumerical 2023 R2.2 FDTD Solver Version 8.30.3536 (Windows 64bit)
+ expires (month/day/year): 12/31/2035
+using config file: Ansys Licensing set with ANSYSLMD_LICENSE_FILE
+license host: 1055@localhost
+current time: 周日 3月 22 20:48:16 2026
+Running on host: WUTHERBOOK
+host available memory (GB): 9.337225
+All processes are communicating and ready to proceed to simulation...
+Running fsp file: D:\Program Files\Lumerical\v232\bin\fdtd-engine.exe -t 1 -remote -shared-solve-license QU5TWVNfTElDRU5TSU5HX0NPTlRFWFRfREFUQT08QU5TWVNfTElDRU5TSU5HX0NPTlRFWFRfREFUQT48SUQ+NDExNTdjYzYtMWIzMS00MDY0LTg0MjYtNjU0MGE3M2ZmY2I4PC9JRD48VFlQRT5IUENfUEFSQU1FVFJJQzwvVFlQRT48TkFNRT5IUEMgUGFyYW1ldHJpYzwvTkFNRT48SEFORExFUj41NTU0M0BXVVRIRVJCT09LPC9IQU5ETEVSPjwvQU5TWVNfTElDRU5TSU5HX0NPTlRFWFRfREFUQT4K D:/MRM_Inverse_Design_V1.1/data/temp_validation.fsp
+Starting meshing
+Simulation size in gridpoints: 1 x 73 x 34
+Refined 0 mesh cells (0%)
+Completed meshing!
+Meshing complete in 0 seconds of CPU time
+Starting meshing
+Simulation size in gridpoints: 1 x 73 x 34
+Refined 0 mesh cells (0%)
+Completed meshing!
+Meshing complete in 0 seconds of CPU time
+Starting meshing
+Simulation size in gridpoints: 1 x 73 x 34
+Refined 0 mesh cells (0%)
+Completed meshing!
+Meshing complete in 0 seconds of CPU time
+number of processors is 1
+processors are distributed as: 1x1x1
+Running 3D Simulation
+Starting meshing
+Simulation size in gridpoints: 1229 x 526 x 48
+Refined 0 mesh cells (0%)
+Completed meshing!
+Meshing complete in 4.03125 seconds of CPU time
+0 0
+Starting meshing
+Simulation size in gridpoints: 1229 x 526 x 48
+Refined 0 mesh cells (0%)
+Completed meshing!
+Meshing complete in 3.14062 seconds of CPU time
+0 0
+Starting meshing
+Simulation size in gridpoints: 1229 x 526 x 48
+Refined 0 mesh cells (0%)
+Completed meshing!
+Meshing complete in 3.57812 seconds of CPU time
+0 0
+finished material properties
+Meshing Time: 20.6528 seconds, Init Electrical Material Time: 2.43827 seconds, Init Magnetic Material Time: 0.0344799
+Using selected optimization level: 2
+Selecting 3d kernel for splitFieldDirection=0 and optLevel=2
+-----------------------------------------
+Beginning initialization of 3D Simulation
+Starting to add sources to simulation
+Adding 3D Mode source propagating in X
+Starting to add boundary conditions to simulation
+Adding 3D PML BC
+Adding 3D PML BC
+Adding 3D PML BC
+Adding 3D PML BC
+Adding 3D PML BC
+Adding 3D PML BC
+Starting to add monitors to Simulation
+Adding analysis monitor
+Adding 3D DFT monitor
+Finished initialization of 3D Simulation
+-----------------------------------------
+All processes are communicating and ready to proceed to simulation...
+Starting 23708 total iterations
+0.101232% complete. Elapsed simulation time: 1.01232e-15 secs. Max time remaining: 1 hr, 16 mins, 3 secs. Auto Shutoff: 1
+1.11355% complete. Elapsed simulation time: 1.11355e-14 secs. Max time remaining: 1 hr, 15 mins, 40 secs. Auto Shutoff: 1
+2.12588% complete. Elapsed simulation time: 2.12588e-14 secs. Max time remaining: 1 hr, 14 mins, 4 secs. Auto Shutoff: 1
+3.1382% complete. Elapsed simulation time: 3.1382e-14 secs. Max time remaining: 1 hr, 14 mins, 10 secs. Auto Shutoff: 1
+4.15052% complete. Elapsed simulation time: 4.15052e-14 secs. Max time remaining: 1 hr, 13 mins, 54 secs. Auto Shutoff: 1
+5.16284% complete. Elapsed simulation time: 5.16284e-14 secs. Max time remaining: 1 hr, 12 mins, 56 secs. Auto Shutoff: 1
+6.17516% complete. Elapsed simulation time: 6.17516e-14 secs. Max time remaining: 1 hr, 12 mins, 2 secs. Auto Shutoff: 0.991564
+7.18749% complete. Elapsed simulation time: 7.18749e-14 secs. Max time remaining: 1 hr, 11 mins, 8 secs. Auto Shutoff: 0.99022
+8.19981% complete. Elapsed simulation time: 8.19981e-14 secs. Max time remaining: 1 hr, 10 mins, 27 secs. Auto Shutoff: 0.989401
